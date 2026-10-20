@@ -100,6 +100,19 @@ button:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px so
 .pal button.done{background:var(--accent-soft);border-color:var(--accent)}
 .pal button.cur{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 
+/* діаграми */
+.diawrap{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:10px;overflow-x:auto}
+svg.dia{display:block;margin:0 auto;width:100%;max-width:440px;height:auto;font-family:var(--font)}
+svg.dia .bx{fill:var(--surface);stroke:var(--fg);stroke-width:1.4}
+svg.dia .ln{stroke:var(--fg);stroke-width:1.4;fill:none}
+svg.dia .tx{fill:var(--fg);font-size:13px;font-weight:600}
+svg.dia .mn{font-weight:400;font-size:12px;font-family:var(--mono)}
+svg.dia .it{font-style:italic}
+svg.dia .lb{fill:var(--muted);font-size:12px;font-weight:600}
+svg.dia .mk-open{fill:var(--surface);stroke:var(--fg);stroke-width:1.2}
+svg.dia .mk-fill{fill:var(--fg);stroke:var(--fg);stroke-width:1.2}
+svg.dia .mk-line{fill:none;stroke:var(--fg);stroke-width:1.4}
+
 /* письмові */
 textarea{width:100%;min-height:130px;resize:vertical;font:inherit;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
 .model{background:var(--accent-soft);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px}
@@ -142,7 +155,7 @@ const LECS = [1,2,3,4,6];
 
 const MQ = [], WQ = [];
 /* Тест: перший варіант у opts завжди правильний, порядок і букви перемішуються під час показу */
-function q(lec, text, opts, why, code){ MQ.push({id:'m'+MQ.length, type:'m', lec, text, opts, why, code}); }
+function q(lec, text, opts, why, code, dia){ MQ.push({id:'m'+MQ.length, type:'m', lec, text, opts, why, code, dia}); }
 function w(lec, text, key, model, code){ WQ.push({id:'w'+WQ.length, type:'w', lec, text, key, model, code}); }
 
 /* ---------- Лекція 1 ---------- */
@@ -1055,6 +1068,273 @@ public class Student
     }
 }`);
 
+/* ====================== КОД: ЩО ВИВЕДЕ / ЯКА ПОМИЛКА ТА ДІАГРАМИ ====================== */
+/* Нові питання лише дописуються в кінець, щоб не змінювати id наявного прогресу */
+const OUT = 'Що виведе код?', ERR = 'Що станеться під час компіляції чи виконання цього коду?';
+
+q(1, ERR,
+ ['Помилка компіляції: поле `balance` приватне й недоступне ззовні (CS0122)','Виведе 100','Виведе 0','NullReferenceException','Помилка виконання: InvalidCastException'],
+ 'Доступ перевіряє компілятор. `private` члени видно лише всередині самого класу.',
+ `class Account { private decimal balance = 100; }
+
+var a = new Account();
+Console.WriteLine(a.balance);`);
+q(2, ERR,
+ ['Помилка компіляції: статичний метод не має доступу до нестатичного поля `count` (CS0120)','Лічильник збільшиться на 1','Поле `count` стане 0','NullReferenceException','Помилка лише під час виконання'],
+ 'У статичному методі немає `this`, тому поля екземпляра недоступні без об\'єкта.',
+ `class Counter
+{
+    int count;
+    static void Inc() { count++; }
+}`);
+q(2, ERR,
+ ['Помилка компіляції: `readonly` поле не можна змінити поза конструктором (CS0191)','Поле стане 2','Поле залишиться 1 без помилок','Помилка виконання','Попередження, код скомпілюється'],
+ '`readonly` поле присвоюють лише в ініціалізаторі або в конструкторі.',
+ `class C
+{
+    readonly int n = 1;
+    void F() { n = 2; }
+}`);
+q(2, OUT,
+ ['Max','Rex','Помилка компіляції','NullReferenceException','Порожній рядок'],
+ 'Dog це клас (reference type). `d2 = d1` копіює посилання, обидві змінні вказують на один об\'єкт.',
+ `var d1 = new Dog { Name = "Rex" };
+var d2 = d1;
+d2.Name = "Max";
+Console.WriteLine(d1.Name);`);
+q(2, OUT,
+ ['AB~B~A','ABAB','BA~A~B','AB~A~B','A~AB~B'],
+ 'Конструктори викликаються від бази до похідного, деструктори в зворотному порядку.',
+ `struct A { A() { cout << "A"; } ~A() { cout << "~A"; } };
+struct B : A { B() { cout << "B"; } ~B() { cout << "~B"; } };
+
+int main() { B b; }`);
+q(2, OUT,
+ ['AD','DA','A','D','Помилка компіляції'],
+ 'Конструктор бази виконується першим, потім тіло конструктора похідного класу.',
+ `class Animal { public Animal() { Console.Write("A"); } }
+class Dog : Animal { public Dog() { Console.Write("D"); } }
+
+new Dog();`);
+q(3, OUT,
+ ['Base','Derived','BaseDerived','Помилка компіляції','Невизначена поведінка'],
+ 'Без `virtual` виклик вирішується за типом вказівника (Base*), а не за типом об\'єкта.',
+ `struct Base { void show() { cout << "Base"; } };
+struct Derived : Base { void show() { cout << "Derived"; } };
+
+Base* p = new Derived;
+p->show();`);
+q(3, OUT,
+ ['Derived','Base','BaseDerived','Помилка компіляції','Залежить від компілятора'],
+ 'З `virtual` виклик іде через vtable, тож обирається версія реального типу об\'єкта.',
+ `struct Base { virtual void show() { cout << "Base"; } };
+struct Derived : Base { void show() override { cout << "Derived"; } };
+
+Base* p = new Derived;
+p->show();`);
+q(3, OUT,
+ ['A','B','AB','Помилка компіляції','Виняток під час виконання'],
+ '`new` лише ховає метод. Виклик через змінну типу A не поліморфний, тому виконується A.F().',
+ `class A { public virtual void F() { Console.Write("A"); } }
+class B : A { public new void F() { Console.Write("B"); } }
+
+A x = new B();
+x.F();`);
+q(3, OUT,
+ ['BC','C','ABC','B','Помилка компіляції'],
+ '`C.Name()` викликає `base.Name()` (це B.Name(), що повертає "B") і додає "C".',
+ `class A { public virtual string Name() => "A"; }
+class B : A { public override string Name() => "B"; }
+class C : B { public override string Name() => base.Name() + "C"; }
+
+Console.WriteLine(new C().Name());`);
+q(3, OUT,
+ ['A','B','AB','Помилка компіляції','Нічого'],
+ 'Параметр `A a` приймається за значенням, тож об\'єкт B «зрізається» (slicing) до A, і віртуальність не допомагає.',
+ `struct A { virtual void f() { cout << "A"; } };
+struct B : A { void f() override { cout << "B"; } };
+
+void run(A a) { a.f(); }
+
+int main() { B b; run(b); }`);
+q(3, ERR,
+ ['Помилка компіляції: не можна створити екземпляр абстрактного класу (CS0144)','Метод Area() поверне 0','NullReferenceException','Виконається, але без викликів Area()','Помилка лише під час виконання'],
+ 'Абстрактний клас не можна інстанціювати. Створюють об\'єкт похідного класу.',
+ `abstract class Shape { public abstract double Area(); }
+
+var s = new Shape();`);
+q(3, ERR,
+ ['Помилка компіляції: метод базового класу не `virtual`, тож `override` неможливий (CS0506)','Виконається, B.F() замінить A.F()','Лише попередження про приховування','Помилка виконання','Метод просто стане `new`'],
+ '`override` дозволений лише для методів `virtual`, `abstract` або `override`.',
+ `class A { public void F() { } }
+class B : A { public override void F() { } }`);
+q(3, ERR,
+ ['Помилка компіляції: не можна оголосити змінну абстрактного класу Shape','Виконається нормально','Помилка лінкера, бо немає area()','Невизначена поведінка','Попередження про чисту віртуальну функцію'],
+ 'Клас із чистою віртуальною функцією (`= 0`) абстрактний, об\'єкт такого типу створити не можна.',
+ `struct Shape { virtual double area() = 0; };
+
+int main() { Shape s; }`);
+q(3, ERR,
+ ['Помилка компіляції: `B::f` не перевизначає віртуальну функцію з `A` (відрізняється `const`)','Компілюється, B::f перевизначає A::f','Попередження, але код працює','Помилка лише під час виконання','B::f автоматично стає невіртуальним без помилок'],
+ 'Саме для таких випадків існує `override`: за різної сигнатури компілятор видасть помилку, а без `override` вийшла б нова функція.',
+ `struct A { virtual void f(); };
+struct B : A { void f() const override; };`);
+q(4, OUT,
+ ['1','5','0','Помилка компіляції','Невизначено'],
+ 'P це структура (value type). `var b = a` копіює значення, тож зміна `b.X` не торкається `a`.',
+ `struct P { public int X; }
+
+var a = new P { X = 1 };
+var b = a;
+b.X = 5;
+Console.WriteLine(a.X);`);
+q(4, OUT,
+ ['12','21','Помилка компіляції','00','Невизначено'],
+ 'Параметри передаються за значенням, функція міняє лише власні копії.',
+ `void Swap(int a, int b) { int t = a; a = b; b = t; }
+
+int main() {
+    int x = 1, y = 2;
+    Swap(x, y);
+    cout << x << y;
+}`);
+q(4, OUT,
+ ['2','1','0','Помилка компіляції','3'],
+ '`ref` передає саму змінну, а не її копію, тож `n++` змінює `v`.',
+ `static void Inc(ref int n) { n++; }
+
+int v = 1;
+Inc(ref v);
+Console.WriteLine(v);`);
+q(4, ERR,
+ ['Помилка виконання: InvalidCastException, бо розпакувати можна лише точний тип `int`','Виконається, `l` стане 5','Помилка компіляції','Повернеться 0','NullReferenceException'],
+ 'Unboxing вимагає точного збігу типу. Спершу треба `(int)o`, а потім за потреби `(long)`.',
+ `object o = 5;
+long l = (long)o;`);
+q(4, ERR,
+ ['Помилка компіляції: у `T` немає методу `CompareTo`, потрібне `where T : IComparable<T>` (CS1061)','Виконається для будь-якого T','Помилка виконання лише для string','Компілюється, але CompareTo поверне 0','Попередження про boxing'],
+ 'У generic-коді C# перевіряється на етапі оголошення, тому без обмеження компілятор знає про `T` лише як про `object`.',
+ `static T Max<T>(T a, T b)
+{
+    return a.CompareTo(b) > 0 ? a : b;
+}`);
+q(4, ERR,
+ ['Помилка компіляції: не можна змінити значення, що повертає індексатор списку (CS1612)','`X` стане 5','Помилка виконання: InvalidOperationException','`X` залишиться 1 без помилок','Попередження про boxing'],
+ 'Індексатор повертає копію структури, змінювати її було б безглуздо, тому компілятор забороняє.',
+ `struct P { public int X; }
+
+var list = new List<P> { new P { X = 1 } };
+list[0].X = 5;`);
+q(4, ERR,
+ ['Помилка компіляції: використання непризначеної локальної змінної (CS0165)','Виведе 0','Виведе пустий рядок','NullReferenceException','Виведе випадкове число'],
+ 'У C# локальні змінні не отримують значення за замовчуванням, їх потрібно ініціалізувати явно. На відміну від полів класу.',
+ `int x;
+Console.WriteLine(x);`);
+q(4, ERR,
+ ['Виняток InvalidOperationException на другому `Pop()`: стек порожній','Другий `Pop()` поверне 0','Помилка компіляції','Другий `Pop()` поверне null','Програма завершиться без помилок'],
+ 'Для порожнього `Stack<T>` метод `Pop()` кидає виняток, а не повертає значення за замовчуванням.',
+ `var s = new Stack<int>();
+s.Push(1);
+s.Pop();
+s.Pop();`);
+
+/* ---- діаграми: невеликий SVG-конструктор (кольори беруться з CSS-змінних, тож працює в обох темах) ---- */
+const xe = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function uml(boxes, rels, W, H){
+  const B = {}; boxes.forEach(b => { b.h = 28 + (b.lines ? b.lines.length*17 + 6 : 0) + (b.stereo ? 15 : 0); B[b.id] = b; });
+  const edge = (a, b) => {                         // точка перетину лінії центр–центр з межею прямокутника a
+    const ax = a.x + a.w/2, ay = a.y + a.h/2, bx = b.x + b.w/2, by = b.y + b.h/2;
+    const dx = bx - ax, dy = by - ay;
+    const t = Math.min(dx ? (a.w/2) / Math.abs(dx) : Infinity, dy ? (a.h/2) / Math.abs(dy) : Infinity);
+    return [ax + dx*t, ay + dy*t];
+  };
+  let s = `<svg class="dia" viewBox="0 0 ${W} ${H}" role="img" aria-label="UML-діаграма"><defs>
+    <marker id="tri" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="12" markerHeight="12" orient="auto"><path d="M1 1L11 6L1 11Z" class="mk-open"/></marker>
+    <marker id="arr" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="11" markerHeight="11" orient="auto"><path d="M1 1L11 6L1 11" class="mk-line"/></marker>
+    <marker id="dia-o" viewBox="0 0 16 10" refX="1" refY="5" markerWidth="16" markerHeight="10" orient="auto"><path d="M1 5L8 1L15 5L8 9Z" class="mk-open"/></marker>
+    <marker id="dia-f" viewBox="0 0 16 10" refX="1" refY="5" markerWidth="16" markerHeight="10" orient="auto"><path d="M1 5L8 1L15 5L8 9Z" class="mk-fill"/></marker></defs>`;
+  rels.forEach(r => {
+    const a = B[r.a], b = B[r.b], p = edge(a, b), q2 = edge(b, a);
+    const dash = (r.t==='real' || r.t==='dep') ? ' stroke-dasharray="6 4"' : '';
+    const mk = {inh:'marker-end="url(#tri)"', real:'marker-end="url(#tri)"', dep:'marker-end="url(#arr)"', nav:'marker-end="url(#arr)"',
+                comp:'marker-start="url(#dia-f)"', agg:'marker-start="url(#dia-o)"', assoc:''}[r.t] || '';
+    s += `<line x1="${p[0]}" y1="${p[1]}" x2="${q2[0]}" y2="${q2[1]}" class="ln"${dash} ${mk}/>`;
+    const lab = (t, pt, other, off) => {           // підпис (множинність) біля кінця лінії
+      if (!t) return '';
+      const dx = other[0]-pt[0], dy = other[1]-pt[1], len = Math.hypot(dx,dy)||1;
+      const x = pt[0] + dx/len*off[0] - dy/len*off[1], y = pt[1] + dy/len*off[0] + dx/len*off[1];
+      return `<text x="${x}" y="${y}" class="lb" text-anchor="middle">${xe(t)}</text>`;
+    };
+    s += lab(r.la, p, q2, [26, -11]) + lab(r.lb, q2, p, [26, -11]);
+  });
+  boxes.forEach(b => {
+    s += `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="3" class="bx"/>`;
+    let y = b.y + 19;
+    if (b.stereo){ s += `<text x="${b.x+b.w/2}" y="${y-2}" class="tx" text-anchor="middle">${xe(b.stereo)}</text>`; y += 15; }
+    s += `<text x="${b.x+b.w/2}" y="${y}" class="tx nm${b.abs?' it':''}" text-anchor="middle">${xe(b.name)}</text>`;
+    if (b.lines){
+      s += `<line x1="${b.x}" y1="${y+7}" x2="${b.x+b.w}" y2="${y+7}" class="ln"/>`;
+      b.lines.forEach((t, i) => {
+        const it = t[0]==='/';                     // рядок з "/" на початку малюється курсивом (абстрактний член)
+        s += `<text x="${b.x+10}" y="${y+24+i*17}" class="tx mn${it?' it':''}">${xe(it ? t.slice(1) : t)}</text>`;
+      });
+    }
+  });
+  return s + '</svg>';
+}
+const bx = (id, name, x, y, w, extra) => Object.assign({id, name, x, y, w: w || 130}, extra || {});
+
+const RELQ = ['Узагальнення (наслідування)','Реалізація інтерфейсу','Композиція','Агрегація','Залежність','Асоціація'];
+const relOpts = i => [RELQ[i]].concat(RELQ.filter((_, k) => k !== i).slice(0, 4));
+const RELWHY = 'Тип зв\'язку визначають за кінцем лінії: порожній трикутник це узагальнення (суцільна лінія) або реалізація (пунктир), ромб це ціле-частина (порожній агрегація, заповнений композиція), пунктирна стрілка залежність, проста лінія асоціація.';
+
+q(6, 'Який зв\'язок зображено між Dog і Animal?', relOpts(0), RELWHY, null,
+  uml([bx('a','Animal',90,15), bx('d','Dog',90,115)], [{a:'d', b:'a', t:'inh'}], 310, 175));
+q(6, 'Який зв\'язок зображено між Circle і IShape?', relOpts(1), RELWHY, null,
+  uml([bx('i','IShape',90,15,130,{stereo:'«interface»'}), bx('c','Circle',90,125)], [{a:'c', b:'i', t:'real'}], 310, 185));
+q(6, 'Який зв\'язок зображено між Car і Engine?', relOpts(2), RELWHY, null,
+  uml([bx('c','Car',20,40), bx('e','Engine',230,40)], [{a:'c', b:'e', t:'comp'}], 390, 100));
+q(6, 'Який зв\'язок зображено між Team і Player?', relOpts(3), RELWHY, null,
+  uml([bx('t','Team',20,40), bx('p','Player',230,40)], [{a:'t', b:'p', t:'agg'}], 390, 100));
+q(6, 'Який зв\'язок зображено між Report і Printer?', relOpts(4), RELWHY, null,
+  uml([bx('r','Report',20,40), bx('p','Printer',230,40)], [{a:'r', b:'p', t:'dep'}], 390, 100));
+q(6, 'Який зв\'язок зображено між Student і Course?', relOpts(5), RELWHY, null,
+  uml([bx('s','Student',20,40), bx('c','Course',230,40)], [{a:'s', b:'c', t:'assoc'}], 390, 100));
+q(6, 'Який рівень доступу має метод `Log()` на діаграмі?',
+  ['protected (`#`)','public (`+`)','private (`-`)','package/internal (`~`)','static (підкреслення)'],
+  'Символ перед членом задає видимість: `+` public, `-` private, `#` protected, `~` package/internal.', null,
+  uml([bx('a','Account',15,10,290,{lines:['- balance : decimal = 0','~ id : int','+ Deposit(amount : decimal) : void','# Log() : void']})], [], 320, 130));
+q(6, 'Що можна сказати про клас Shape на діаграмі?',
+  ['Shape абстрактний (назва курсивом), `Area()` теж абстрактний, а Circle його реалізує','Shape це інтерфейс, а Circle його реалізує','Shape звичайний клас, а `Area()` статичний','Shape приватний, а Circle його успадковує','Shape і Circle не пов\'язані'],
+  'Курсив у назві класу або методу означає «абстрактний». Інтерфейс позначають стереотипом «interface», статичні члени підкреслюють.', null,
+  uml([bx('s','Shape',55,10,200,{abs:true,lines:['/+ Area() : double']}), bx('c','Circle',55,125,200,{lines:['- r : double','+ Area() : double']})],
+      [{a:'c', b:'s', t:'inh'}], 310, 215));
+q(6, 'Який фрагмент C# відповідає цій діаграмі?',
+  ['`class Car { private Engine engine = new Engine(); }`','`class Car : Engine { }`','`class Car { void Drive(Engine e) { } }`','`class Car : IEngine { }`','`class Engine : Car { }`'],
+  'Заповнений ромб біля Car це композиція: Engine є частиною Car і створюється разом із ним, тобто зберігається в полі.', null,
+  uml([bx('c','Car',20,40), bx('e','Engine',230,40)], [{a:'c', b:'e', t:'comp', lb:'1'}], 390, 100));
+q(6, 'Який фрагмент C# відповідає цій діаграмі?',
+  ['`class Circle : IShape { }`','`class IShape : Circle { }`','`class Circle { IShape s; }`','`class Circle { void Draw(IShape s) { } }`','`abstract class Circle : IShape { }`'],
+  'Пунктир із порожнім трикутником біля IShape означає, що Circle реалізує інтерфейс.', null,
+  uml([bx('i','IShape',90,15,130,{stereo:'«interface»'}), bx('c','Circle',90,125)], [{a:'c', b:'i', t:'real'}], 310, 185));
+q(6, 'Що станеться з рядками OrderLine, якщо видалити Order?',
+  ['Вони теж зникнуть, бо OrderLine є частиною Order (композиція)','Залишаться, бо вони існують окремо','Залишаться, але втратять зв\'язок із Product','Видалення Order заборонене','Із діаграми цього не видно'],
+  'Заповнений ромб біля Order: частина не живе без цілого. Product пов\'язаний лише асоціацією, тож залишається.', null,
+  uml([bx('o','Order',20,15,130), bx('l','OrderLine',230,15,130), bx('p','Product',230,125,130)],
+      [{a:'o', b:'l', t:'comp', la:'1', lb:'1..*'}, {a:'l', b:'p', t:'nav', la:'*', lb:'1'}], 390, 175));
+q(6, 'Що не так із цією діаграмою, якщо Engine є частиною Car?',
+  ['Ромб композиції має стояти біля Car (цілого), а не біля Engine','Лінія має бути пунктирною','Потрібен порожній ромб замість заповненого','Потрібен трикутник біля Car','З діаграмою все гаразд'],
+  'Ромб завжди малюють біля цілого. Заповнений підходить, бо частина не існує без цілого.', null,
+  uml([bx('c','Car',20,40), bx('e','Engine',230,40)], [{a:'e', b:'c', t:'comp'}], 390, 100));
+q(6, 'Чи може Person не мати Passport згідно з діаграмою?',
+  ['Так, множинність `0..1` біля Passport допускає відсутність','Ні, кожна особа має рівно один паспорт','Ні, потрібен щонайменше один','Так, але лише для Passport','Із діаграми цього не видно'],
+  'Множинність записується біля того класу, кількість екземплярів якого вона описує: `0..1` означає нуль або один.', null,
+  uml([bx('p','Person',20,40), bx('q','Passport',230,40)], [{a:'p', b:'q', t:'assoc', la:'1', lb:'0..1'}], 390, 100));
+q(6, 'Скільки студентів може бути в одній групі за діаграмою?',
+  ['Один або більше','Рівно один','Нуль або один','Не більше двох','Рівно стільки, скільки груп'],
+  'Підпис `1..*` біля Student читається так: до однієї Group належить від одного до багатьох студентів.', null,
+  uml([bx('g','Group',20,40), bx('s','Student',230,40)], [{a:'g', b:'s', t:'assoc', la:'1', lb:'1..*'}], 390, 100));
+
 
 /* ====================== КАРТКИ З ТЕРМІНАМИ ====================== */
 const CARDS = [];
@@ -1205,6 +1485,9 @@ function startTopic(l, type){
   const pool = (type==='w'?WQ:MQ).filter(x=>x.lec===l);
   start('practice', LEC_SHORT[l] + (type==='w'?' · письмові':' · тести'), shuffle(pool));
 }
+const CODEQ = () => MQ.filter(x=>x.code), DIAQ = () => MQ.filter(x=>x.dia);
+function startCode(){ start('practice','Що виведе код / яка помилка', shuffle(CODEQ())); }
+function startDia(){ start('practice','Діаграми', shuffle(DIAQ())); }
 function startRandom(){ start('practice','10 випадкових питань', pick(MQ,10)); }
 function startMistakes(){ start('practice','Робота над помилками', shuffle(ALL.filter(x=>seen(x)&&!isOk(x)))); }
 function startWritten(){ start('practice','Письмові питання', shuffle(WQ)); }
@@ -1284,6 +1567,8 @@ function home(){
   </div>
   <div class="quick">
     <div class="panel"><h2>10 випадкових</h2><p class="small muted">Швидка серія тестів, після кожної відповіді одразу пояснення.</p><div class="row"><button class="btn sm" data-act="random">Розпочати</button></div></div>
+    <div class="panel"><h2>Код: вивід чи помилка</h2><p class="small muted">${CODEQ().length} фрагментів C++/C#: що виведе або яка помилка виникне.</p><div class="row"><button class="btn sm" data-act="code">Розпочати</button></div></div>
+    <div class="panel"><h2>Діаграми</h2><p class="small muted">${DIAQ().length} UML-діаграм: визначте зв'язок, видимість, множинність.</p><div class="row"><button class="btn sm" data-act="dia">Розпочати</button></div></div>
     <div class="panel"><h2>Помилки</h2><p class="small muted">${wrong ? 'Питання, на які востаннє відповіли неправильно: '+wrong+'.' : 'Поки що помилок немає.'}</p><div class="row"><button class="btn sm" data-act="mistakes" ${wrong?'':'disabled'}>Повторити</button></div></div>
     <div class="panel"><h2>Картки</h2><p class="small muted">${CARDS.length} термінів: прочитайте термін, згадайте визначення, перевірте себе. Вивчено ${CARDS.filter(knownCard).length}.</p><div class="row"><button class="btn sm" data-act="cards" data-l="0">Розпочати</button></div></div>
     <div class="panel"><h2>Письмові</h2><p class="small muted">${WQ.length} питань з еталонною відповіддю та самоперевіркою за пунктами.</p><div class="row"><button class="btn sm" data-act="written">Розпочати</button></div></div>
@@ -1333,7 +1618,7 @@ function quiz(){
   const answered = x => x.type==='m' ? S.ans[x.id]!==undefined : (S.wr[x.id] && S.wr[x.id].rev);
   const done = S.items.filter(answered).length;
   let body = `<div class="tag">${esc(LEC_SHORT[it.lec])} · ${it.type==='m'?'тест':'письмове'}</div>
-    <div class="qtext">${fmt(it.text)}</div>${it.code && it.type==='m' ? '<pre><code>'+esc(it.code)+'</code></pre>' : ''}`;
+    <div class="qtext">${fmt(it.text)}</div>${it.dia ? '<div class="diawrap">'+it.dia+'</div>' : ''}${it.code && it.type==='m' ? '<pre><code>'+esc(it.code)+'</code></pre>' : ''}`;
   if (it.type==='m'){
     body += optsHtml(it);
     if (!mock && S.ans[it.id]!==undefined){
@@ -1427,6 +1712,8 @@ app.addEventListener('click', e=>{
   const a = b.dataset.act;
   if (a==='mock') startMock();
   else if (a==='random') startRandom();
+  else if (a==='code') startCode();
+  else if (a==='dia') startDia();
   else if (a==='mistakes') startMistakes();
   else if (a==='written') startWritten();
   else if (a==='topic') startTopic(+b.dataset.l, b.dataset.t);
